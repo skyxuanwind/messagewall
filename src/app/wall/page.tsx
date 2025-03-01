@@ -73,9 +73,12 @@ export default function Wall() {
   const [socket, setSocket] = useState<any>(null);
 
   useEffect(() => {
-    const newSocket = io({
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
+    console.log('Connecting to socket URL:', socketUrl);
+    
+    const newSocket = io(socketUrl, {
       path: '/api/socketio',
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
       rememberUpgrade: true,
       reconnection: true,

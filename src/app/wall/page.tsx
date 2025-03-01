@@ -4,17 +4,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import YouTube, { YouTubeEvent } from 'react-youtube';
 import { Message } from '@/types/message';
-import { io } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 
 const colors = [
   'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
   'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
 ];
-
-const getWebSocketUrl = () => {
-  if (typeof window === 'undefined') return '';
-  return window.location.origin;
-};
 
 const MessageBubble = ({ message }: { message: Message }) => {
   const [position, setPosition] = useState({ x: message.style.x, y: message.style.y });
@@ -70,13 +65,15 @@ const MessageBubble = ({ message }: { message: Message }) => {
 export default function Wall() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showVideo, setShowVideo] = useState(false);
-  const [socket, setSocket] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
 
   useEffect(() => {
+    let socket: Socket;
+    
     try {
-      const newSocket = io({
+      socket = io(window.location.origin, {
         path: '/api/socketio',
         transports: ['polling', 'websocket'],
         upgrade: true,
@@ -89,25 +86,25 @@ export default function Wall() {
         autoConnect: true
       });
 
-      newSocket.on('connect', () => {
-        console.log('Connected to server with ID:', newSocket.id);
+      socket.on('connect', () => {
+        console.log('Connected to server with ID:', socket.id);
         setIsConnected(true);
         setError(null);
       });
 
-      newSocket.on('connect_error', (error: any) => {
+      socket.on('connect_error', (error: any) => {
         console.error('Connection error:', error.message);
         setError(`連接錯誤: ${error.message}`);
         setIsConnected(false);
       });
 
-      newSocket.on('disconnect', (reason: string) => {
+      socket.on('disconnect', (reason: string) => {
         console.log('Disconnected:', reason);
         setIsConnected(false);
         setError(`已斷開連接: ${reason}`);
       });
 
-      newSocket.on('newMessage', (message: Message) => {
+      socket.on('newMessage', (message: Message) => {
         console.log('Received message:', message);
         setMessages(prev => {
           const newMessages = [...prev, message];
@@ -118,17 +115,17 @@ export default function Wall() {
         });
       });
 
-      setSocket(newSocket);
-
-      return () => {
-        if (newSocket) {
-          newSocket.disconnect();
-        }
-      };
+      setSocketInstance(socket);
     } catch (err: any) {
       console.error('Socket initialization error:', err);
       setError(`初始化錯誤: ${err.message}`);
     }
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
   }, []);
 
   const handleReset = () => {
@@ -136,11 +133,11 @@ export default function Wall() {
     setShowVideo(false);
   };
 
-  const handleReconnect = () => {
-    if (socket) {
-      socket.connect();
+  const handleReconnect = useCallback(() => {
+    if (socketInstance) {
+      socketInstance.connect();
     }
-  };
+  }, [socketInstance]);
 
   if (showVideo) {
     return (
@@ -173,7 +170,7 @@ export default function Wall() {
       </h1>
       
       {error && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
           {error}
           <button
             onClick={handleReconnect}
@@ -185,7 +182,7 @@ export default function Wall() {
       )}
 
       {!isConnected && !error && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
           正在連接伺服器...
         </div>
       )}
@@ -198,7 +195,7 @@ export default function Wall() {
 
       <button
         onClick={handleReset}
-        className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+        className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors z-50"
       >
         重置留言
       </button>

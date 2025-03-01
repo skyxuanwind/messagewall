@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import YouTube from 'react-youtube';
+import YouTube, { YouTubeEvent } from 'react-youtube';
 import { Message } from '@/types/message';
 import { io } from 'socket.io-client';
 
@@ -140,7 +140,7 @@ export default function Wall() {
           }}
           onEnd={() => setShowVideo(false)}
           className="w-full h-screen"
-          onReady={(event) => {
+          onReady={(event: YouTubeEvent) => {
             event.target.playVideo();
           }}
         />

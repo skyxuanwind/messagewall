@@ -1,0 +1,157 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import YouTube from 'react-youtube';
+import { Message } from '@/types/message';
+import { io } from 'socket.io-client';
+
+const colors = [
+  'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
+  'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+];
+
+const getWebSocketUrl = () => {
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || window.location.origin;
+  return wsUrl;
+};
+
+const MessageBubble = ({ message }: { message: Message }) => {
+  const [position, setPosition] = useState({ x: message.style.x, y: message.style.y });
+
+  useEffect(() => {
+    const moveCloud = () => {
+      setPosition(prev => ({
+        x: prev.x + (Math.random() - 0.5) * 2,
+        y: prev.y + (Math.random() - 0.5) * 2
+      }));
+    };
+
+    const interval = setInterval(moveCloud, 50);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ scale: 0 }}
+      animate={{
+        scale: message.style.scale,
+        x: position.x,
+        y: position.y,
+      }}
+      transition={{
+        type: "spring",
+        stiffness: 50,
+        damping: 20
+      }}
+      className={`absolute p-4 rounded-lg shadow-lg ${message.style.color} text-white max-w-sm backdrop-blur-sm bg-opacity-90`}
+      style={{
+        filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))'
+      }}
+    >
+      <h3 className="font-bold">{message.name}</h3>
+      <p className="mt-2">{message.content}</p>
+      {message.dream && (
+        <p className="mt-2 text-sm opacity-80">夢幻引薦：{message.dream}</p>
+      )}
+      {message.image && (
+        <div className="mt-2 relative h-32 w-full">
+          <img
+            src={message.image}
+            alt="User uploaded"
+            className="object-contain w-full h-full rounded-lg"
+          />
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+export default function Wall() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [showVideo, setShowVideo] = useState(false);
+
+  useEffect(() => {
+    const wsUrl = getWebSocketUrl();
+    console.log('Connecting to WebSocket at:', wsUrl);
+    
+    const socket = io(wsUrl, {
+      path: '/api/socketio',
+      addTrailingSlash: false,
+      transports: ['websocket']
+    });
+
+    socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+    });
+
+    socket.on('newMessage', (message: Message) => {
+      console.log('Received message:', message);
+      setMessages(prev => {
+        const newMessages = [...prev, message];
+        if (newMessages.length >= 20 && !showVideo) {
+          setShowVideo(true);
+        }
+        return newMessages;
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const handleReset = () => {
+    setMessages([]);
+    setShowVideo(false);
+  };
+
+  if (showVideo) {
+    return (
+      <div className="fixed inset-0 bg-black">
+        <YouTube
+          videoId="-tu7ZIZrO4Y"
+          opts={{
+            height: '100%',
+            width: '100%',
+            playerVars: {
+              autoplay: 1,
+              fs: 1,
+              controls: 0,
+            },
+          }}
+          onEnd={() => setShowVideo(false)}
+          className="w-full h-screen"
+          onReady={(event) => {
+            event.target.playVideo();
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <main className="relative min-h-screen bg-gradient-to-b from-blue-900 to-teal-500 overflow-hidden">
+      <h1 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-6xl font-bold text-white opacity-20 whitespace-nowrap">
+        BNI富揚白金名人堂留言牆
+      </h1>
+      
+      <AnimatePresence>
+        {messages.map((message) => (
+          <MessageBubble key={message.id} message={message} />
+        ))}
+      </AnimatePresence>
+
+      <button
+        onClick={handleReset}
+        className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+      >
+        重置留言
+      </button>
+    </main>
+  );
+} 

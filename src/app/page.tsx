@@ -1,101 +1,148 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import Image from 'next/image';
+import { MessageInput } from '@/types/message';
+
+const getApiUrl = () => {
+  return process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+};
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [formData, setFormData] = useState<MessageInput>({
+    name: '',
+    content: '',
+    dream: '',
+  });
+  const [image, setImage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const { getRootProps, getInputProps } = useDropzone({
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif']
+    },
+    maxFiles: 1,
+    onDrop: (acceptedFiles) => {
+      const file = acceptedFiles[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    const messageData = {
+      ...formData,
+      image: image || undefined,
+    };
+
+    try {
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messageData),
+      });
+
+      if (response.ok) {
+        setFormData({ name: '', content: '', dream: '' });
+        setImage(null);
+        alert('留言已送出！');
+      } else {
+        throw new Error('送出失敗');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('發送失敗，請稍後再試');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-blue-900 to-teal-500 p-4">
+      <div className="max-w-md mx-auto bg-white/90 rounded-lg p-6 backdrop-blur-sm">
+        <h1 className="text-2xl font-bold text-center mb-6">BNI富揚白金名人堂分會</h1>
+        <h2 className="text-xl text-center mb-8">留言牆</h2>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">您的姓名</label>
+            <input
+              type="text"
+              required
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="請輸入您的名字"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">我想要對富揚說</label>
+            <textarea
+              required
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              rows={4}
+              value={formData.content}
+              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+              placeholder="分享您對富揚的話"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">我的夢幻引薦</label>
+            <textarea
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              rows={3}
+              value={formData.dream}
+              onChange={(e) => setFormData({ ...formData, dream: e.target.value })}
+              placeholder="描述您的夢幻引薦"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">上傳圖片</label>
+            <div
+              {...getRootProps()}
+              className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-500"
+            >
+              <input {...getInputProps()} />
+              {image ? (
+                <div className="relative h-40 w-full">
+                  <Image
+                    src={image}
+                    alt="Uploaded preview"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+              ) : (
+                <p className="text-gray-500">點擊或拖曳圖片至此處上傳</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`w-full bg-blue-600 text-white py-2 px-4 rounded-md transition-colors ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
+            }`}
           >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            {isSubmitting ? '送出中...' : '送出留言'}
+          </button>
+        </form>
+      </div>
+    </main>
   );
 }

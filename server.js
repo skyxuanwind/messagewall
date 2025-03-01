@@ -1,5 +1,5 @@
+const express = require('express');
 const { createServer } = require('http');
-const { parse } = require('url');
 const next = require('next');
 const { Server } = require('socket.io');
 
@@ -8,38 +8,63 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url, true);
-    if (parsedUrl.pathname === '/api/socketio') {
-      res.end();
-      return;
-    }
-    handle(req, res, parsedUrl);
-  });
+  const expressApp = express();
+  const server = createServer(expressApp);
 
   // 初始化 Socket.io
   const io = new Server(server, {
     path: '/api/socketio',
-    addTrailingSlash: false,
+    serveClient: false,
     cors: {
       origin: '*',
-      methods: ['GET', 'POST']
-    }
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['*']
+    },
+    connectTimeout: 45000,
+    pingTimeout: 30000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
+    perMessageDeflate: true,
+    httpCompression: true
   });
   
+  // Socket.io 連接處理
   io.on('connection', (socket) => {
-    console.log('Client connected');
+    console.log('Client connected:', socket.id);
     
-    socket.on('disconnect', () => {
-      console.log('Client disconnected');
+    // 發送歡迎消息
+    socket.emit('welcome', { message: 'Welcome to the message wall!' });
+    
+    socket.on('disconnect', (reason) => {
+      console.log('Client disconnected:', socket.id, 'Reason:', reason);
+    });
+
+    socket.on('error', (error) => {
+      console.error('Socket error for client', socket.id, ':', error);
     });
   });
 
   // 导出 io 实例供其他模块使用
   global.io = io;
 
-  server.listen(3000, (err) => {
+  // Express 中間件
+  expressApp.use(express.json());
+  
+  // Socket.io 路由處理
+  expressApp.get('/api/socketio', (req, res) => {
+    res.end();
+  });
+
+  // 所有其他請求交給 Next.js 處理
+  expressApp.all('*', (req, res) => {
+    return handle(req, res);
+  });
+
+  const port = process.env.PORT || 3000;
+  server.listen(port, '0.0.0.0', (err) => {
     if (err) throw err;
-    console.log('> Ready on http://localhost:3000');
+    console.log(`> Ready on http://0.0.0.0:${port}`);
   });
 }); 

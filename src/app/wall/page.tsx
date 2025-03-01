@@ -12,8 +12,8 @@ const colors = [
 ];
 
 const getWebSocketUrl = () => {
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || window.location.origin;
-  return wsUrl;
+  if (typeof window === 'undefined') return '';
+  return window.location.origin;
 };
 
 const MessageBubble = ({ message }: { message: Message }) => {
@@ -70,26 +70,35 @@ const MessageBubble = ({ message }: { message: Message }) => {
 export default function Wall() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showVideo, setShowVideo] = useState(false);
+  const [socket, setSocket] = useState<any>(null);
 
   useEffect(() => {
-    const wsUrl = getWebSocketUrl();
-    console.log('Connecting to WebSocket at:', wsUrl);
-    
-    const socket = io(wsUrl, {
+    const newSocket = io({
       path: '/api/socketio',
-      addTrailingSlash: false,
-      transports: ['websocket']
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      rememberUpgrade: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      autoConnect: true
     });
 
-    socket.on('connect', () => {
-      console.log('Connected to server');
+    newSocket.on('connect', () => {
+      console.log('Connected to server with ID:', newSocket.id);
     });
 
-    socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
+    newSocket.on('connect_error', (error: any) => {
+      console.error('Connection error:', error.message);
     });
 
-    socket.on('newMessage', (message: Message) => {
+    newSocket.on('disconnect', (reason: string) => {
+      console.log('Disconnected:', reason);
+    });
+
+    newSocket.on('newMessage', (message: Message) => {
       console.log('Received message:', message);
       setMessages(prev => {
         const newMessages = [...prev, message];
@@ -100,8 +109,13 @@ export default function Wall() {
       });
     });
 
+    setSocket(newSocket);
+
+    // Cleanup on unmount
     return () => {
-      socket.disconnect();
+      if (newSocket) {
+        newSocket.disconnect();
+      }
     };
   }, []);
 

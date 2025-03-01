@@ -2,10 +2,16 @@ services:
   - type: web
     name: messagewall
     env: node
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
+      - key: NODE_VERSION
+        value: 18.19.1
     healthCheckPath: /
-    autoDeploy: true 
+    autoDeploy: true
+    numInstances: 1
+    plan: starter 

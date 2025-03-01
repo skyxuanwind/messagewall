@@ -71,60 +71,75 @@ export default function Wall() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showVideo, setShowVideo] = useState(false);
   const [socket, setSocket] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
-    console.log('Connecting to socket URL:', socketUrl);
-    
-    const newSocket = io(socketUrl, {
-      path: '/api/socketio',
-      transports: ['websocket', 'polling'],
-      upgrade: true,
-      rememberUpgrade: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      autoConnect: true
-    });
-
-    newSocket.on('connect', () => {
-      console.log('Connected to server with ID:', newSocket.id);
-    });
-
-    newSocket.on('connect_error', (error: any) => {
-      console.error('Connection error:', error.message);
-    });
-
-    newSocket.on('disconnect', (reason: string) => {
-      console.log('Disconnected:', reason);
-    });
-
-    newSocket.on('newMessage', (message: Message) => {
-      console.log('Received message:', message);
-      setMessages(prev => {
-        const newMessages = [...prev, message];
-        if (newMessages.length >= 20 && !showVideo) {
-          setShowVideo(true);
-        }
-        return newMessages;
+    try {
+      const newSocket = io({
+        path: '/api/socketio',
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        rememberUpgrade: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        autoConnect: true
       });
-    });
 
-    setSocket(newSocket);
+      newSocket.on('connect', () => {
+        console.log('Connected to server with ID:', newSocket.id);
+        setIsConnected(true);
+        setError(null);
+      });
 
-    // Cleanup on unmount
-    return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-      }
-    };
+      newSocket.on('connect_error', (error: any) => {
+        console.error('Connection error:', error.message);
+        setError(`連接錯誤: ${error.message}`);
+        setIsConnected(false);
+      });
+
+      newSocket.on('disconnect', (reason: string) => {
+        console.log('Disconnected:', reason);
+        setIsConnected(false);
+        setError(`已斷開連接: ${reason}`);
+      });
+
+      newSocket.on('newMessage', (message: Message) => {
+        console.log('Received message:', message);
+        setMessages(prev => {
+          const newMessages = [...prev, message];
+          if (newMessages.length >= 20 && !showVideo) {
+            setShowVideo(true);
+          }
+          return newMessages;
+        });
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        if (newSocket) {
+          newSocket.disconnect();
+        }
+      };
+    } catch (err: any) {
+      console.error('Socket initialization error:', err);
+      setError(`初始化錯誤: ${err.message}`);
+    }
   }, []);
 
   const handleReset = () => {
     setMessages([]);
     setShowVideo(false);
+  };
+
+  const handleReconnect = () => {
+    if (socket) {
+      socket.connect();
+    }
   };
 
   if (showVideo) {
@@ -156,6 +171,24 @@ export default function Wall() {
       <h1 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-6xl font-bold text-white opacity-20 whitespace-nowrap">
         BNI富揚白金名人堂留言牆
       </h1>
+      
+      {error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
+          {error}
+          <button
+            onClick={handleReconnect}
+            className="ml-4 underline hover:no-underline"
+          >
+            重新連接
+          </button>
+        </div>
+      )}
+
+      {!isConnected && !error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg">
+          正在連接伺服器...
+        </div>
+      )}
       
       <AnimatePresence>
         {messages.map((message) => (

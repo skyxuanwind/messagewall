@@ -1,4 +1,4 @@
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 
 class SocketClient {
   private static instance: Socket | null = null;
@@ -11,6 +11,9 @@ class SocketClient {
       this.isInitializing = true;
       
       try {
+        // 動態導入 socket.io-client
+        const { io } = await import('socket.io-client');
+        
         // 初始化 Socket.IO 服务器
         const response = await fetch('/api/socketio');
         if (!response.ok) {

@@ -1,11 +1,17 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import YouTube, { YouTubeEvent } from 'react-youtube';
+import type { YouTubeEvent, YouTubeProps } from 'react-youtube';
 import { Message } from '@/types/message';
-import { Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import SocketClient from '@/lib/socket';
+
+// 動態導入 YouTube 組件
+const YouTube = dynamic<YouTubeProps>(() => import('react-youtube').then(mod => mod.default), {
+  ssr: false,
+});
 
 const colors = [
   'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
@@ -63,7 +69,8 @@ const MessageBubble = ({ message }: { message: Message }) => {
   );
 };
 
-export default function Wall() {
+// 使用動態導入避免 SSR
+const Wall = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showVideo, setShowVideo] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -71,27 +78,34 @@ export default function Wall() {
   const socketRef = useRef<Socket | null>(null);
   const isInitializing = useRef(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const isMounted = useRef(false);
 
   const setupSocketListeners = useCallback((socket: Socket) => {
+    if (!isMounted.current) return;
+
     socket.on('connect', () => {
+      if (!isMounted.current) return;
       console.log('Socket connected:', socket.id);
       setIsConnected(true);
       setError(null);
     });
 
     socket.on('connect_error', (error: Error) => {
+      if (!isMounted.current) return;
       console.error('Socket connection error:', error);
       setIsConnected(false);
       setError(`連接錯誤: ${error.message}`);
     });
 
     socket.on('disconnect', (reason: string) => {
+      if (!isMounted.current) return;
       console.log('Socket disconnected:', reason);
       setIsConnected(false);
       setError(`已斷開連接: ${reason}`);
     });
 
     socket.on('newMessage', (message: Message) => {
+      if (!isMounted.current) return;
       console.log('Received message:', message);
       setMessages(prev => {
         const newMessages = [...prev, message];
@@ -119,17 +133,17 @@ export default function Wall() {
   }, []);
 
   useEffect(() => {
-    let mounted = true;
+    isMounted.current = true;
 
     const initSocket = async () => {
-      if (isInitializing.current) return;
+      if (!isMounted.current || isInitializing.current) return;
       isInitializing.current = true;
 
       try {
         cleanupSocket();
         const socket = await SocketClient.getSocket();
         
-        if (!socket || !mounted) {
+        if (!socket || !isMounted.current) {
           throw new Error('Socket initialization failed');
         }
 
@@ -137,30 +151,35 @@ export default function Wall() {
         setupSocketListeners(socket);
 
       } catch (error) {
-        if (mounted) {
+        if (isMounted.current) {
           console.error('Socket initialization error:', error);
           setError(`初始化錯誤: ${error instanceof Error ? error.message : '未知錯誤'}`);
           setIsConnected(false);
           
           // 5秒後自動重試
           reconnectTimeoutRef.current = setTimeout(() => {
-            if (mounted) {
+            if (isMounted.current) {
               isInitializing.current = false;
               initSocket();
             }
           }, 5000);
         }
       } finally {
-        if (mounted) {
+        if (isMounted.current) {
           isInitializing.current = false;
         }
       }
     };
 
-    initSocket();
+    // 延遲初始化以確保組件已完全掛載
+    setTimeout(() => {
+      if (isMounted.current) {
+        initSocket();
+      }
+    }, 0);
 
     return () => {
-      mounted = false;
+      isMounted.current = false;
       cleanupSocket();
     };
   }, [setupSocketListeners, cleanupSocket]);
@@ -248,4 +267,8 @@ export default function Wall() {
       </button>
     </main>
   );
-} 
+};
+
+export default dynamic(() => Promise.resolve(Wall), {
+  ssr: false,
+}); 

@@ -82,6 +82,8 @@ export default function Wall() {
   const [error, setError] = useState<string | null>(null);
 
   const socket = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    
     const socketConfig = {
       path: '/api/socketio',
       addTrailingSlash: false,

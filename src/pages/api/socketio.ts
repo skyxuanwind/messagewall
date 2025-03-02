@@ -1,14 +1,17 @@
-import { Server } from 'socket.io';
-import { NextResponse } from 'next/server';
+import { Server as NetServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
+import { NextApiRequest, NextApiResponse } from 'next';
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-let io: Server | null = null;
-
-export async function GET() {
-  if (!io) {
-    io = new Server({
+const ioHandler = (req: NextApiRequest, res: NextApiResponse) => {
+  if (!(res.socket as any).server.io) {
+    const httpServer: NetServer = (res.socket as any).server;
+    const io = new SocketServer(httpServer, {
       path: '/api/socketio',
       addTrailingSlash: false,
       transports: ['websocket'],
@@ -31,9 +34,11 @@ export async function GET() {
         console.error('Socket error:', error);
       });
     });
+
+    (res.socket as any).server.io = io;
   }
 
-  return NextResponse.json({ ok: true });
-}
+  res.end();
+};
 
-export const POST = GET; 
+export default ioHandler; 

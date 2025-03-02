@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import YouTube, { YouTubeEvent } from 'react-youtube';
 import { Message } from '@/types/message';
@@ -10,6 +10,20 @@ const colors = [
   'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
   'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
 ];
+
+// Socket.IO 配置
+const socketConfig = {
+  path: '/api/socketio',
+  transports: ['polling', 'websocket'],
+  upgrade: true,
+  rememberUpgrade: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 20000,
+  autoConnect: false
+};
 
 const MessageBubble = ({ message }: { message: Message }) => {
   const [position, setPosition] = useState({ x: message.style.x, y: message.style.y });
@@ -67,77 +81,61 @@ export default function Wall() {
   const [showVideo, setShowVideo] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
 
-  useEffect(() => {
-    let socket: Socket;
-    
-    try {
-      socket = io(window.location.origin, {
-        path: '/api/socketio',
-        transports: ['polling', 'websocket'],
-        upgrade: true,
-        rememberUpgrade: true,
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20000,
-        autoConnect: true
-      });
-
-      socket.on('connect', () => {
-        console.log('Connected to server with ID:', socket.id);
-        setIsConnected(true);
-        setError(null);
-      });
-
-      socket.on('connect_error', (error: any) => {
-        console.error('Connection error:', error.message);
-        setError(`連接錯誤: ${error.message}`);
-        setIsConnected(false);
-      });
-
-      socket.on('disconnect', (reason: string) => {
-        console.log('Disconnected:', reason);
-        setIsConnected(false);
-        setError(`已斷開連接: ${reason}`);
-      });
-
-      socket.on('newMessage', (message: Message) => {
-        console.log('Received message:', message);
-        setMessages(prev => {
-          const newMessages = [...prev, message];
-          if (newMessages.length >= 20 && !showVideo) {
-            setShowVideo(true);
-          }
-          return newMessages;
-        });
-      });
-
-      setSocketInstance(socket);
-    } catch (err: any) {
-      console.error('Socket initialization error:', err);
-      setError(`初始化錯誤: ${err.message}`);
-    }
-
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-    };
+  const socket = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return io(window.location.origin, socketConfig);
   }, []);
 
-  const handleReset = () => {
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.connect();
+
+    socket.on('connect', () => {
+      console.log('Connected to server with ID:', socket.id);
+      setIsConnected(true);
+      setError(null);
+    });
+
+    socket.on('connect_error', (error: any) => {
+      console.error('Connection error:', error.message);
+      setError(`連接錯誤: ${error.message}`);
+      setIsConnected(false);
+    });
+
+    socket.on('disconnect', (reason: string) => {
+      console.log('Disconnected:', reason);
+      setIsConnected(false);
+      setError(`已斷開連接: ${reason}`);
+    });
+
+    socket.on('newMessage', (message: Message) => {
+      console.log('Received message:', message);
+      setMessages(prev => {
+        const newMessages = [...prev, message];
+        if (newMessages.length >= 20 && !showVideo) {
+          setShowVideo(true);
+        }
+        return newMessages;
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [socket]);
+
+  const handleReset = useCallback(() => {
     setMessages([]);
     setShowVideo(false);
-  };
+  }, []);
 
   const handleReconnect = useCallback(() => {
-    if (socketInstance) {
-      socketInstance.connect();
+    if (socket) {
+      socket.connect();
     }
-  }, [socketInstance]);
+  }, [socket]);
 
   if (showVideo) {
     return (

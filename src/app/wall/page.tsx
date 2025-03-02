@@ -82,36 +82,28 @@ export default function Wall() {
   const [error, setError] = useState<string | null>(null);
 
   const socket = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    const socketConfig = getSocketConfig();
-    console.log('Initializing socket with config:', socketConfig);
-    return io(window.location.origin, socketConfig);
+    const socketConfig = {
+      path: '/api/socketio',
+      addTrailingSlash: false,
+      transports: ['websocket'],
+    };
+    
+    return io(process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin, socketConfig);
   }, []);
 
   useEffect(() => {
     if (!socket) return;
 
-    const connectSocket = () => {
-      console.log('Attempting to connect...');
-      socket.connect();
-    };
-
     socket.on('connect', () => {
-      console.log('Connected to server with ID:', socket.id);
-      setIsConnected(true);
-      setError(null);
+      console.log('Socket connected:', socket.id);
     });
 
-    socket.on('connect_error', (error: any) => {
-      console.error('Connection error:', error.message);
-      setError(`連接錯誤: ${error.message}`);
-      setIsConnected(false);
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
     });
 
-    socket.on('disconnect', (reason: string) => {
-      console.log('Disconnected:', reason);
-      setIsConnected(false);
-      setError(`已斷開連接: ${reason}`);
+    socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
     });
 
     socket.on('newMessage', (message: Message) => {
@@ -125,10 +117,7 @@ export default function Wall() {
       });
     });
 
-    connectSocket();
-
     return () => {
-      console.log('Cleaning up socket connection...');
       socket.disconnect();
     };
   }, [socket]);

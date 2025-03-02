@@ -1,5 +1,7 @@
 import type { Socket } from 'socket.io-client';
 
+let socketIOClient: any = null;
+
 class SocketClient {
   private static instance: Socket | null = null;
   private static isInitializing: boolean = false;
@@ -12,7 +14,9 @@ class SocketClient {
       
       try {
         // 動態導入 socket.io-client
-        const { io } = await import('socket.io-client');
+        if (!socketIOClient) {
+          socketIOClient = await import('socket.io-client');
+        }
         
         // 初始化 Socket.IO 服务器
         const response = await fetch('/api/socketio');
@@ -23,7 +27,7 @@ class SocketClient {
         // 等待一小段時間確保服務器初始化完成
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        this.instance = io({
+        const socket = socketIOClient.io({
           path: '/api/socketio',
           addTrailingSlash: false,
           transports: ['websocket'],
@@ -36,27 +40,29 @@ class SocketClient {
         });
 
         // 手動連接
-        this.instance.connect();
+        socket.connect();
 
         // 添加连接事件监听器
-        this.instance.on('connect', () => {
-          console.log('Socket connected successfully:', this.instance?.id);
+        socket.on('connect', () => {
+          console.log('Socket connected successfully:', socket.id);
         });
 
-        this.instance.on('connect_error', (error) => {
+        socket.on('connect_error', (error: Error) => {
           console.error('Socket connection error:', error);
-          this.instance?.disconnect();
+          socket.disconnect();
           this.instance = null;
           this.isInitializing = false;
         });
 
-        this.instance.on('disconnect', (reason) => {
+        socket.on('disconnect', (reason: string) => {
           console.log('Socket disconnected:', reason);
           if (reason === 'io server disconnect') {
             // 服務器主動斷開連接，需要手動重連
-            this.instance?.connect();
+            socket.connect();
           }
         });
+
+        this.instance = socket;
 
       } catch (error) {
         console.error('Failed to initialize socket:', error);

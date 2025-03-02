@@ -4,25 +4,12 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import YouTube, { YouTubeEvent } from 'react-youtube';
 import { Message } from '@/types/message';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 
 const colors = [
   'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
   'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
 ];
-
-// Socket.IO 配置
-const getSocketConfig = () => ({
-  path: '/api/socketio',
-  addTrailingSlash: false,
-  transports: ['websocket'],
-  autoConnect: false,
-  reconnection: true,
-  reconnectionAttempts: Infinity,
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 5000,
-  timeout: 20000,
-});
 
 const MessageBubble = ({ message }: { message: Message }) => {
   const [position, setPosition] = useState({ x: message.style.x, y: message.style.y });
@@ -80,35 +67,44 @@ export default function Wall() {
   const [showVideo, setShowVideo] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<any>(null);
 
-  const socket = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const socketConfig = {
       path: '/api/socketio',
       addTrailingSlash: false,
       transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     };
-    
-    return io(process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin, socketConfig);
-  }, []);
 
-  useEffect(() => {
-    if (!socket) return;
+    const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin, socketConfig);
+    setSocket(socketInstance);
 
-    socket.on('connect', () => {
-      console.log('Socket connected:', socket.id);
+    socketInstance.on('connect', () => {
+      console.log('Socket connected:', socketInstance.id);
+      setIsConnected(true);
+      setError(null);
     });
 
-    socket.on('connect_error', (error) => {
+    socketInstance.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
+      setIsConnected(false);
+      setError(`連接錯誤: ${error.message}`);
     });
 
-    socket.on('disconnect', (reason) => {
+    socketInstance.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
+      setIsConnected(false);
+      setError(`已斷開連接: ${reason}`);
     });
 
-    socket.on('newMessage', (message: Message) => {
+    socketInstance.on('newMessage', (message: Message) => {
       console.log('Received message:', message);
       setMessages(prev => {
         const newMessages = [...prev, message];
@@ -120,9 +116,9 @@ export default function Wall() {
     });
 
     return () => {
-      socket.disconnect();
+      socketInstance.disconnect();
     };
-  }, [socket]);
+  }, []);
 
   const handleReset = useCallback(() => {
     setMessages([]);

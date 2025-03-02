@@ -1,7 +1,5 @@
 import type { Socket } from 'socket.io-client';
 
-let socketIOClient: any = null;
-
 class SocketClient {
   private static instance: Socket | null = null;
   private static isInitializing: boolean = false;
@@ -14,9 +12,7 @@ class SocketClient {
       
       try {
         // 動態導入 socket.io-client
-        if (!socketIOClient) {
-          socketIOClient = await import('socket.io-client');
-        }
+        const { io } = await import('socket.io-client');
         
         // 初始化 Socket.IO 服务器
         const response = await fetch('/api/socketio');
@@ -27,7 +23,7 @@ class SocketClient {
         // 等待一小段時間確保服務器初始化完成
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        const socket = socketIOClient.io({
+        const socket = io(window.location.origin, {
           path: '/api/socketio',
           addTrailingSlash: false,
           transports: ['websocket'],

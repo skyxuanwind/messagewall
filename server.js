@@ -17,7 +17,9 @@ app.prepare().then(() => {
     cors: {
       origin: '*',
       methods: ['GET', 'POST']
-    }
+    },
+    transports: ['websocket'],
+    pingTimeout: 60000,
   });
 
   global.io = io;
@@ -27,6 +29,10 @@ app.prepare().then(() => {
     
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
+    });
+
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
     });
   });
 

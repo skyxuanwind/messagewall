@@ -12,18 +12,17 @@ const colors = [
 ];
 
 // Socket.IO 配置
-const socketConfig = {
+const getSocketConfig = () => ({
   path: '/api/socketio',
-  transports: ['polling', 'websocket'],
-  upgrade: true,
-  rememberUpgrade: true,
+  addTrailingSlash: false,
+  transports: ['websocket'],
+  autoConnect: false,
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
   timeout: 20000,
-  autoConnect: false
-};
+});
 
 const MessageBubble = ({ message }: { message: Message }) => {
   const [position, setPosition] = useState({ x: message.style.x, y: message.style.y });
@@ -84,13 +83,18 @@ export default function Wall() {
 
   const socket = useMemo(() => {
     if (typeof window === 'undefined') return null;
+    const socketConfig = getSocketConfig();
+    console.log('Initializing socket with config:', socketConfig);
     return io(window.location.origin, socketConfig);
   }, []);
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.connect();
+    const connectSocket = () => {
+      console.log('Attempting to connect...');
+      socket.connect();
+    };
 
     socket.on('connect', () => {
       console.log('Connected to server with ID:', socket.id);
@@ -121,7 +125,10 @@ export default function Wall() {
       });
     });
 
+    connectSocket();
+
     return () => {
+      console.log('Cleaning up socket connection...');
       socket.disconnect();
     };
   }, [socket]);
@@ -133,6 +140,7 @@ export default function Wall() {
 
   const handleReconnect = useCallback(() => {
     if (socket) {
+      console.log('Attempting to reconnect...');
       socket.connect();
     }
   }, [socket]);

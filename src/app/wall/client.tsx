@@ -1,15 +1,9 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
 import { useSocket, isSocketConnected } from '@/lib/socket';
 import { Message } from '@/types/next';
-import dynamic from 'next/dynamic';
-
-const YouTube = dynamic(() => import('react-youtube'), {
-  ssr: false,
-  loading: () => <div>Loading...</div>
-});
 
 export default function WallClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,18 +52,13 @@ export default function WallClient() {
       {showVideo ? (
         <div className="fixed inset-0 flex items-center justify-center bg-black">
           <div className="relative">
-            <Suspense fallback={<div>Loading...</div>}>
-              <YouTube
-                videoId="dQw4w9WgXcQ"
-                opts={{
-                  height: '390',
-                  width: '640',
-                  playerVars: {
-                    autoplay: 1,
-                  },
-                }}
-              />
-            </Suspense>
+            <iframe
+              width="640"
+              height="390"
+              src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
             <button
               onClick={resetMessages}
               className="absolute -top-10 right-0 rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"

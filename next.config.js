@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false,
+  swcMinify: true,
+  webpack: (config) => {
+    config.externals.push({
+      'socket.io-client': 'socket.io-client',
+    });
+    return config;
+  },
   images: {
     remotePatterns: [
       {
@@ -8,14 +14,6 @@ const nextConfig = {
         hostname: '**',
       },
     ],
-  },
-  webpack: (config) => {
-    config.externals = [...config.externals, 'socket.io-client'];
-    return config;
-  },
-  swcMinify: true,
-  experimental: {
-    serverActions: true,
   },
 };
 

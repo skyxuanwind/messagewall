@@ -6,15 +6,7 @@ import { NextRequest } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-interface CustomSocket extends NodeJS.Socket {
-  server: any;
-}
-
-interface SocketResponse extends NextApiResponse {
-  socket: CustomSocket;
-}
-
-const socketHandler = (req: NextRequest, res: SocketResponse) => {
+async function handler(req: NextRequest, res: NextApiResponse & { socket: any }) {
   if (!res.socket.server.io) {
     const httpServer: NetServer = res.socket.server as any;
     const io = new ServerIO(httpServer, {
@@ -42,7 +34,7 @@ const socketHandler = (req: NextRequest, res: SocketResponse) => {
     res.socket.server.io = io;
   }
 
-  res.end();
-};
+  return new Response('Socket.IO server running', { status: 200 });
+}
 
-export { socketHandler as GET, socketHandler as POST }; 
+export { handler as GET, handler as POST }; 

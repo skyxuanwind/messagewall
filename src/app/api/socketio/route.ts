@@ -1,47 +1,41 @@
 import { Server as NetServer } from 'http';
 import { Server as ServerIO } from 'socket.io';
-import { NextApiResponse } from 'next';
-import { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-async function handler(req: NextRequest, res: any) {
-  try {
-    if (!res.socket.server.io) {
-      const httpServer: NetServer = res.socket.server as any;
-      const io = new ServerIO(httpServer, {
-        path: '/api/socketio',
-        addTrailingSlash: false,
-        transports: ['websocket'],
-        cors: {
-          origin: '*',
-          methods: ['GET', 'POST'],
-        },
-        pingTimeout: 60000,
-        pingInterval: 25000,
-      });
+let io: ServerIO | undefined;
 
-      io.on('connection', (socket) => {
-        console.log('Client connected:', socket.id);
+if (typeof io === 'undefined') {
+  io = new ServerIO({
+    path: '/api/socketio',
+    addTrailingSlash: false,
+    transports: ['websocket'],
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST'],
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+  });
 
-        socket.on('disconnect', () => {
-          console.log('Client disconnected:', socket.id);
-        });
+  io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
 
-        socket.on('error', (error) => {
-          console.error('Socket error:', error);
-        });
-      });
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+    });
 
-      res.socket.server.io = io;
-    }
-
-    return new Response('Socket.IO server running', { status: 200 });
-  } catch (error) {
-    console.error('Socket.IO server error:', error);
-    return new Response('Internal Server Error', { status: 500 });
-  }
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+  });
 }
 
-export { handler as GET, handler as POST }; 
+export async function GET() {
+  return new Response('Socket.IO server running', { status: 200 });
+}
+
+export async function POST() {
+  return new Response('Socket.IO server running', { status: 200 });
+} 

@@ -12,4 +12,12 @@ export interface SocketWithIO extends Socket {
 
 export interface NextApiResponseServerIO extends NextApiResponse {
   socket: SocketWithIO;
+}
+
+export interface Message {
+  id?: string;
+  name: string;
+  content: string;
+  dream?: string;
+  image?: string;
 } 

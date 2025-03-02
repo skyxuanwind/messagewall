@@ -11,9 +11,6 @@ class SocketClient {
       this.isInitializing = true;
       
       try {
-        // 動態導入 socket.io-client
-        const { io } = await import('socket.io-client');
-        
         // 初始化 Socket.IO 服务器
         const response = await fetch('/api/socketio');
         if (!response.ok) {
@@ -22,8 +19,16 @@ class SocketClient {
         
         // 等待一小段時間確保服務器初始化完成
         await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 使用 require 語法導入 socket.io-client
+        const socketModule = await new Promise<any>((resolve) => {
+          import('socket.io-client').then((module) => {
+            resolve(module.default || module);
+          });
+        });
         
-        const socket = io(window.location.origin, {
+        // 創建 socket 實例
+        const socket = socketModule(window.location.origin, {
           path: '/api/socketio',
           addTrailingSlash: false,
           transports: ['websocket'],
@@ -32,11 +37,8 @@ class SocketClient {
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           timeout: 20000,
-          autoConnect: false, // 禁用自動連接
+          autoConnect: true,
         });
-
-        // 手動連接
-        socket.connect();
 
         // 添加连接事件监听器
         socket.on('connect', () => {

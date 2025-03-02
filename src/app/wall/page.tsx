@@ -70,6 +70,53 @@ export default function Wall() {
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isInitializing = useRef(false);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+
+  const setupSocketListeners = useCallback((socket: Socket) => {
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id);
+      setIsConnected(true);
+      setError(null);
+    });
+
+    socket.on('connect_error', (error: Error) => {
+      console.error('Socket connection error:', error);
+      setIsConnected(false);
+      setError(`連接錯誤: ${error.message}`);
+    });
+
+    socket.on('disconnect', (reason: string) => {
+      console.log('Socket disconnected:', reason);
+      setIsConnected(false);
+      setError(`已斷開連接: ${reason}`);
+    });
+
+    socket.on('newMessage', (message: Message) => {
+      console.log('Received message:', message);
+      setMessages(prev => {
+        const newMessages = [...prev, message];
+        if (newMessages.length >= 20 && !showVideo) {
+          setShowVideo(true);
+        }
+        return newMessages;
+      });
+    });
+  }, [showVideo]);
+
+  const cleanupSocket = useCallback(() => {
+    if (socketRef.current) {
+      const socket = socketRef.current;
+      socket.off('connect');
+      socket.off('connect_error');
+      socket.off('disconnect');
+      socket.off('newMessage');
+      SocketClient.disconnect();
+      socketRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -79,61 +126,34 @@ export default function Wall() {
       isInitializing.current = true;
 
       try {
+        cleanupSocket();
         const socket = await SocketClient.getSocket();
+        
         if (!socket || !mounted) {
           throw new Error('Socket initialization failed');
         }
 
         socketRef.current = socket;
+        setupSocketListeners(socket);
 
-        socket.on('connect', () => {
-          if (mounted) {
-            console.log('Socket connected:', socket.id);
-            setIsConnected(true);
-            setError(null);
-          }
-        });
-
-        socket.on('connect_error', (error: Error) => {
-          if (mounted) {
-            console.error('Socket connection error:', error);
-            setIsConnected(false);
-            setError(`連接錯誤: ${error.message}`);
-          }
-        });
-
-        socket.on('disconnect', (reason: string) => {
-          if (mounted) {
-            console.log('Socket disconnected:', reason);
-            setIsConnected(false);
-            setError(`已斷開連接: ${reason}`);
-          }
-        });
-
-        socket.on('newMessage', (message: Message) => {
-          if (mounted) {
-            console.log('Received message:', message);
-            setMessages(prev => {
-              const newMessages = [...prev, message];
-              if (newMessages.length >= 20 && !showVideo) {
-                setShowVideo(true);
-              }
-              return newMessages;
-            });
-          }
-        });
-
-        if (!socket.connected) {
-          socket.connect();
-        }
       } catch (error) {
         if (mounted) {
           console.error('Socket initialization error:', error);
           setError(`初始化錯誤: ${error instanceof Error ? error.message : '未知錯誤'}`);
           setIsConnected(false);
+          
+          // 5秒後自動重試
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (mounted) {
+              isInitializing.current = false;
+              initSocket();
+            }
+          }, 5000);
         }
       } finally {
-        isInitializing.current = false;
+        if (mounted) {
+          isInitializing.current = false;
+        }
       }
     };
 
@@ -141,18 +161,9 @@ export default function Wall() {
 
     return () => {
       mounted = false;
-      isInitializing.current = false;
-      if (socketRef.current) {
-        const socket = socketRef.current;
-        socket.off('connect');
-        socket.off('connect_error');
-        socket.off('disconnect');
-        socket.off('newMessage');
-        SocketClient.disconnect();
-        socketRef.current = null;
-      }
+      cleanupSocket();
     };
-  }, [showVideo]);
+  }, [setupSocketListeners, cleanupSocket]);
 
   const handleReset = useCallback(() => {
     setMessages([]);
@@ -161,23 +172,19 @@ export default function Wall() {
 
   const handleReconnect = useCallback(async () => {
     try {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      SocketClient.disconnect();
+      cleanupSocket();
       isInitializing.current = false;
-      
       const socket = await SocketClient.getSocket();
-      if (socket && !socket.connected) {
+      if (socket) {
         console.log('Attempting to reconnect...');
-        socket.connect();
+        socketRef.current = socket;
+        setupSocketListeners(socket);
       }
     } catch (error) {
       console.error('Reconnection error:', error);
       setError(`重新連接錯誤: ${error instanceof Error ? error.message : '未知錯誤'}`);
     }
-  }, []);
+  }, [cleanupSocket, setupSocketListeners]);
 
   if (showVideo) {
     return (

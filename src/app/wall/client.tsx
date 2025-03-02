@@ -1,35 +1,89 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Socket } from 'socket.io-client';
-import { useSocket, isSocketConnected } from '@/lib/socket';
+import { useEffect, useState, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { Message } from '@/types/next';
 
 export default function WallClient() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const socket = useSocket();
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!socket) return;
+    const initSocket = async () => {
+      try {
+        // 初始化 Socket.IO 服务器
+        const response = await fetch('/api/socketio');
+        if (!response.ok) {
+          throw new Error('Failed to initialize socket server');
+        }
 
-    const handleNewMessage = (message: Message) => {
-      setMessages(prev => [...prev, message]);
+        // 創建 socket 實例
+        const socket = io(window.location.origin, {
+          path: '/api/socketio',
+          addTrailingSlash: false,
+          transports: ['websocket'],
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          timeout: 20000,
+        });
+
+        // 添加连接事件监听器
+        socket.on('connect', () => {
+          console.log('Socket connected successfully:', socket.id);
+          setError(null);
+        });
+
+        socket.on('connect_error', (error: Error) => {
+          console.error('Socket connection error:', error);
+          setError(`連接錯誤: ${error.message}`);
+          socket.disconnect();
+          socketRef.current = null;
+        });
+
+        socket.on('disconnect', (reason: string) => {
+          console.log('Socket disconnected:', reason);
+          if (reason === 'io server disconnect' && socket) {
+            socket.connect();
+          }
+        });
+
+        socket.on('message', (message: Message) => {
+          setMessages(prev => [...prev, message]);
+        });
+
+        socketRef.current = socket;
+      } catch (error) {
+        console.error('Failed to initialize socket:', error);
+        setError(`初始化錯誤: ${error instanceof Error ? error.message : '未知錯誤'}`);
+        socketRef.current = null;
+      }
     };
 
-    socket.on('message', handleNewMessage);
+    if (!socketRef.current) {
+      initSocket();
+    }
 
     return () => {
-      socket.off('message', handleNewMessage);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
-  }, [socket]);
+  }, []);
 
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-24">
         <div className="text-red-500">{error}</div>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            socketRef.current = null;
+            setError(null);
+            window.location.reload();
+          }}
           className="mt-4 rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
         >
           重新連接

@@ -4,8 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import YouTube, { YouTubeEvent } from 'react-youtube';
 import { Message } from '@/types/message';
-import { socket } from '@/lib/socket';
-import { Socket } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 
 const colors = [
   'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
@@ -68,30 +67,43 @@ export default function Wall() {
   const [showVideo, setShowVideo] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const socketInstance = socket as Socket;
-    if (!socketInstance) return;
+    if (typeof window === 'undefined') return;
 
-    const onConnect = () => {
+    const socketInstance = io(window.location.origin, {
+      path: '/api/socketio',
+      addTrailingSlash: false,
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+    });
+
+    setSocket(socketInstance);
+
+    socketInstance.on('connect', () => {
       console.log('Socket connected:', socketInstance.id);
       setIsConnected(true);
       setError(null);
-    };
+    });
 
-    const onConnectError = (error: Error) => {
+    socketInstance.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
       setIsConnected(false);
       setError(`連接錯誤: ${error.message}`);
-    };
+    });
 
-    const onDisconnect = (reason: string) => {
+    socketInstance.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
       setIsConnected(false);
       setError(`已斷開連接: ${reason}`);
-    };
+    });
 
-    const onNewMessage = (message: Message) => {
+    socketInstance.on('newMessage', (message: Message) => {
       console.log('Received message:', message);
       setMessages(prev => {
         const newMessages = [...prev, message];
@@ -100,25 +112,19 @@ export default function Wall() {
         }
         return newMessages;
       });
-    };
-
-    socketInstance.on('connect', onConnect);
-    socketInstance.on('connect_error', onConnectError);
-    socketInstance.on('disconnect', onDisconnect);
-    socketInstance.on('newMessage', onNewMessage);
-
-    if (!socketInstance.connected) {
-      socketInstance.connect();
-    }
+    });
 
     return () => {
-      socketInstance.off('connect', onConnect);
-      socketInstance.off('connect_error', onConnectError);
-      socketInstance.off('disconnect', onDisconnect);
-      socketInstance.off('newMessage', onNewMessage);
       socketInstance.disconnect();
+      setSocket(null);
     };
-  }, [showVideo]);
+  }, []);
+
+  useEffect(() => {
+    if (socket && !socket.connected) {
+      socket.connect();
+    }
+  }, [socket]);
 
   const handleReset = useCallback(() => {
     setMessages([]);
@@ -126,12 +132,11 @@ export default function Wall() {
   }, []);
 
   const handleReconnect = useCallback(() => {
-    const socketInstance = socket as Socket;
-    if (socketInstance && !socketInstance.connected) {
+    if (socket && !socket.connected) {
       console.log('Attempting to reconnect...');
-      socketInstance.connect();
+      socket.connect();
     }
-  }, []);
+  }, [socket]);
 
   if (showVideo) {
     return (
